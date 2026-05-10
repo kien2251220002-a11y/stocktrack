@@ -14,7 +14,7 @@ async function startServer() {
 
   // const allowedOrigins = (process.env.ALLOWED_ORIGIN || "").split(",").filter(Boolean);
   // const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : "*";
-  
+  //aaaaaa
   app.use(cors({ 
     origin: "*",
     credentials: false
