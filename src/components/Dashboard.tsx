@@ -11,8 +11,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/stats').then(res => res.json()),
-      fetch('/api/inventory').then(res => res.json())
+      fetch(`${import.meta.env.VITE_API_URL}/api/stats`).then(res => res.json()),
+      fetch(`${import.meta.env.VITE_API_URL}/api/inventory`).then(res => res.json())
     ]).then(([statsData, inventoryData]) => {
       setStats(statsData);
       setInventory(inventoryData);

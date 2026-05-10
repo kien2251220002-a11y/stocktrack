@@ -18,8 +18,8 @@ export default function Stock() {
 
   const fetchData = () => {
     Promise.all([
-      fetch('/api/items').then(res => res.json()),
-      fetch('/api/stock-logs').then(res => res.json())
+      fetch(`${import.meta.env.VITE_API_URL}/api/items`).then(res => res.json()),
+      fetch(`${import.meta.env.VITE_API_URL}/api/stock-logs`).then(res => res.json())
     ]).then(([itemsData, logsData]) => {
       setItems(itemsData);
       setLogs(logsData);
@@ -39,7 +39,7 @@ export default function Stock() {
     }
 
     try {
-      const res = await fetch('/api/stock-logs', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/stock-logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,8 +1,9 @@
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import Database from "better-sqlite3";
 import { fileURLToPath } from "url";
+import { pool, initDB } from "./src/db";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,80 +12,16 @@ async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
+  app.use(cors({ origin: process.env.ALLOWED_ORIGIN || "*" }));
   app.use(express.json());
-
-  // Database Initialization
-  const db = new Database(process.env.DB_PATH || "inventory.db");
-  db.pragma("foreign_keys = ON");
-
-  // Create tables
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      sku TEXT UNIQUE NOT NULL,
-      unit TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS stock_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      item_id INTEGER NOT NULL,
-      type TEXT CHECK(type IN ('import', 'export')) NOT NULL,
-      quantity INTEGER NOT NULL,
-      note TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_stock_logs_item_id ON stock_logs(item_id);
-  `);
-
-  // Insert sample data if empty
-  const itemCount = db.prepare("SELECT COUNT(*) as count FROM items").get() as { count: number };
-  if (itemCount.count === 0) {
-    const insertItem = db.prepare("INSERT INTO items (name, sku, unit) VALUES (?, ?, ?)");
-    const insertLog = db.prepare("INSERT INTO stock_logs (item_id, type, quantity, note) VALUES (?, ?, ?, ?)");
-
-    const sampleItems = [
-      { name: 'Bút bi xanh Thiên Long', sku: 'BBX-TL-001', unit: 'cái' },
-      { name: 'Giấy A4 Double A 70gsm', sku: 'GA4-DA-001', unit: 'ram' },
-      { name: 'Hộp mực HP 85A', sku: 'HMX-HP-85A', unit: 'hộp' },
-      { name: 'Thước kẻ 30cm', sku: 'TK-30-001', unit: 'cái' },
-      { name: 'Balo văn phòng', sku: 'BVP-BK-001', unit: 'cái' }
-    ];
-
-    // Wrap in transaction for data integrity
-    const transaction = db.transaction(() => {
-      sampleItems.forEach(item => {
-        const result = insertItem.run(item.name, item.sku, item.unit);
-        const itemId = result.lastInsertRowid;
-
-        // Add some sample logs
-        if (item.sku === 'BBX-TL-001') {
-          insertLog.run(itemId, 'import', 245, 'Nhập đầu kỳ');
-          insertLog.run(itemId, 'import', 100, 'Nhập bổ sung');
-        } else if (item.sku === 'GA4-DA-001') {
-          insertLog.run(itemId, 'import', 8, 'Tồn kho cũ');
-        } else if (item.sku === 'TK-30-001') {
-          insertLog.run(itemId, 'import', 132, 'Nhập mới');
-        } else if (item.sku === 'BVP-BK-001') {
-          insertLog.run(itemId, 'import', 5, 'Nhập mẫu');
-          insertLog.run(itemId, 'export', 2, 'Xuất cho nhân viên mới');
-        }
-      });
-    });
-
-    transaction();
-    console.log("Sample data initialized.");
-  }
+  await initDB();
 
   // API Routes
 
   // Health check
-  app.get("/api/health", (req, res) => {
+  app.get("/api/health", async (req, res) => {
     try {
-      db.prepare("SELECT 1").get();
+      await pool.query("SELECT 1");
       res.json({ status: "ok", timestamp: new Date().toISOString(), db: "connected" });
     } catch (err) {
       console.error("Health check error:", err);
@@ -93,9 +30,9 @@ async function startServer() {
   });
 
   // Get all items with current stock calculation
-  app.get("/api/inventory", (req, res) => {
+  app.get("/api/inventory", async (req, res) => {
     try {
-      const rows = db.prepare(`
+      const result = await pool.query(`
         SELECT 
           i.*,
           COALESCE(SUM(CASE WHEN sl.type = 'import' THEN sl.quantity ELSE 0 END), 0) as total_import,
@@ -105,8 +42,8 @@ async function startServer() {
         FROM items i
         LEFT JOIN stock_logs sl ON i.id = sl.item_id
         GROUP BY i.id
-      `).all();
-      res.json(rows);
+      `);
+      res.json(result.rows);
     } catch (err: any) {
       console.error("Inventory query error:", err);
       res.status(500).json({ error: err.message });
@@ -114,10 +51,10 @@ async function startServer() {
   });
 
   // Get items (simple list)
-  app.get("/api/items", (req, res) => {
+  app.get("/api/items", async (req, res) => {
     try {
-      const rows = db.prepare("SELECT * FROM items ORDER BY created_at DESC").all();
-      res.json(rows);
+      const result = await pool.query("SELECT * FROM items ORDER BY created_at DESC");
+      res.json(result.rows);
     } catch (err: any) {
       console.error("Get items error:", err);
       res.status(500).json({ error: err.message });
@@ -125,7 +62,7 @@ async function startServer() {
   });
 
   // Add new item
-  app.post("/api/items", (req, res) => {
+  app.post("/api/items", async (req, res) => {
     const { name, sku, unit } = req.body;
 
     // Validate
@@ -134,13 +71,14 @@ async function startServer() {
     }
 
     try {
-      const info = db.prepare("INSERT INTO items (name, sku, unit) VALUES (?, ?, ?)").run(
-        name.trim(), sku.trim().toUpperCase(), unit.trim()
+      const result = await pool.query(
+        "INSERT INTO items (name, sku, unit) VALUES ($1, $2, $3) RETURNING id",
+        [name.trim(), sku.trim().toUpperCase(), unit.trim()]
       );
-      res.status(201).json({ id: info.lastInsertRowid, name, sku, unit });
+      res.status(201).json({ id: result.rows[0].id, name, sku, unit });
     } catch (err: any) {
       console.error("Insert item error:", err);
-      if (err.message.includes("UNIQUE")) {
+      if (err.message.includes("duplicate key value")) {
         return res.status(409).json({ error: "Mã SKU đã tồn tại" });
       }
       res.status(400).json({ error: err.message });
@@ -148,10 +86,10 @@ async function startServer() {
   });
 
   // Delete item
-  app.delete("/api/items/:id", (req, res) => {
+  app.delete("/api/items/:id", async (req, res) => {
     try {
-      const result = db.prepare("DELETE FROM items WHERE id = ?").run(req.params.id);
-      if (result.changes === 0) {
+      const result = await pool.query("DELETE FROM items WHERE id = $1", [req.params.id]);
+      if (result.rowCount === 0) {
         return res.status(404).json({ error: "Sản phẩm không tồn tại" });
       }
       res.status(204).send();
@@ -162,19 +100,21 @@ async function startServer() {
   });
 
   // Get stock logs
-  app.get("/api/stock-logs", (req, res) => {
+  app.get("/api/stock-logs", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 500);
       const offset = parseInt(req.query.offset as string) || 0;
-      
-      const rows = db.prepare(`
+      const result = await pool.query(
+        `
         SELECT sl.*, i.name as item_name
         FROM stock_logs sl
         JOIN items i ON sl.item_id = i.id
         ORDER BY sl.created_at DESC
-        LIMIT ? OFFSET ?
-      `).all(limit, offset);
-      res.json(rows);
+        LIMIT $1 OFFSET $2
+      `,
+        [limit, offset]
+      );
+      res.json(result.rows);
     } catch (err: any) {
       console.error("Get stock logs error:", err);
       res.status(500).json({ error: err.message });
@@ -182,7 +122,7 @@ async function startServer() {
   });
 
   // Add stock log
-  app.post("/api/stock-logs", (req, res) => {
+  app.post("/api/stock-logs", async (req, res) => {
     const { item_id, type, quantity, note } = req.body;
 
     // Validate input
@@ -197,31 +137,31 @@ async function startServer() {
       return res.status(400).json({ error: "Số lượng phải là số nguyên dương" });
     }
 
-    // Kiểm tra tồn kho khi xuất
-    if (type === "export") {
-      const stock = db.prepare(`
-        SELECT COALESCE(SUM(CASE WHEN type='import' THEN quantity ELSE -quantity END), 0) AS current_stock
-        FROM stock_logs WHERE item_id = ?
-      `).get(item_id) as { current_stock: number };
-
-      if (stock.current_stock < qty) {
-        return res.status(400).json({
-          error: `Không đủ tồn kho. Hiện có: ${stock.current_stock}, yêu cầu xuất: ${qty}`
-        });
-      }
-    }
-
-    // Kiểm tra item tồn tại
-    const item = db.prepare("SELECT id FROM items WHERE id = ?").get(item_id);
-    if (!item) {
-      return res.status(404).json({ error: "Sản phẩm không tồn tại" });
-    }
-
     try {
-      const info = db.prepare(
-        "INSERT INTO stock_logs (item_id, type, quantity, note) VALUES (?, ?, ?, ?)"
-      ).run(item_id, type, qty, note?.trim() || null);
-      res.status(201).json({ id: info.lastInsertRowid, item_id, type, quantity: qty, note });
+      if (type === "export") {
+        const stockResult = await pool.query(
+          `SELECT COALESCE(SUM(CASE WHEN type='import' THEN quantity ELSE -quantity END), 0) AS current_stock FROM stock_logs WHERE item_id = $1`,
+          [item_id]
+        );
+        const stock = stockResult.rows[0] as { current_stock: number };
+
+        if (stock.current_stock < qty) {
+          return res.status(400).json({
+            error: `Không đủ tồn kho. Hiện có: ${stock.current_stock}, yêu cầu xuất: ${qty}`
+          });
+        }
+      }
+
+      const itemResult = await pool.query("SELECT id FROM items WHERE id = $1", [item_id]);
+      if (itemResult.rowCount === 0) {
+        return res.status(404).json({ error: "Sản phẩm không tồn tại" });
+      }
+
+      const insertResult = await pool.query(
+        "INSERT INTO stock_logs (item_id, type, quantity, note) VALUES ($1, $2, $3, $4) RETURNING id",
+        [item_id, type, qty, note?.trim() || null]
+      );
+      res.status(201).json({ id: insertResult.rows[0].id, item_id, type, quantity: qty, note });
     } catch (err: any) {
       console.error("Insert stock log error:", err);
       res.status(400).json({ error: err.message });
@@ -229,16 +169,20 @@ async function startServer() {
   });
 
   // Stats
-  app.get("/api/stats", (req, res) => {
+  app.get("/api/stats", async (req, res) => {
     try {
-      const totalItems = db.prepare("SELECT COUNT(*) as count FROM items").get() as { count: number };
-      const todayImport = db.prepare("SELECT COALESCE(SUM(quantity), 0) as sum FROM stock_logs WHERE type = 'import' AND date(created_at) = date('now')").get() as { sum: number };
-      const todayExport = db.prepare("SELECT COALESCE(SUM(quantity), 0) as sum FROM stock_logs WHERE type = 'export' AND date(created_at) = date('now')").get() as { sum: number };
-      
+      const totalItemsResult = await pool.query("SELECT COUNT(*)::int as count FROM items");
+      const todayImportResult = await pool.query(
+        "SELECT COALESCE(SUM(quantity), 0)::int as sum FROM stock_logs WHERE type = 'import' AND date(created_at) = CURRENT_DATE"
+      );
+      const todayExportResult = await pool.query(
+        "SELECT COALESCE(SUM(quantity), 0)::int as sum FROM stock_logs WHERE type = 'export' AND date(created_at) = CURRENT_DATE"
+      );
+
       res.json({
-        total_items: totalItems.count,
-        today_import: todayImport.sum,
-        today_export: todayExport.sum
+        total_items: totalItemsResult.rows[0].count,
+        today_import: todayImportResult.rows[0].sum,
+        today_export: todayExportResult.rows[0].sum,
       });
     } catch (err: any) {
       console.error("Stats query error:", err);
