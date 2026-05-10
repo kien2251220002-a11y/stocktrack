@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.local
+.git
+.gitignore
+.github
+README.md
+inventory.db
+data
+.DS_Store
+*.log

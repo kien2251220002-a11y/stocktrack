@@ -1,0 +1,6 @@
+{
+  "name": "StockTrack - Quản lý kho chuyên nghiệp",
+  "description": "Hệ thống quản lý kho hàng thông minh với tính năng theo dõi tồn kho, nhập xuất và báo cáo chi tiết.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
