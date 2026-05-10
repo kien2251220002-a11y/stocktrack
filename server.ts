@@ -3,7 +3,7 @@ import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { pool, initDB } from "./src/db";
+import { pool, initDB } from "./src/db.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,12 +12,9 @@ async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
-  // const allowedOrigins = (process.env.ALLOWED_ORIGIN || "").split(",").filter(Boolean);
-  // const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : "*";
-  //aaaaaa
-  app.use(cors({ 
-    origin: "*",
-    credentials: false
+  app.use(cors({
+    origin: process.env.ALLOWED_ORIGIN || "*",
+    credentials: true
   }));
   app.use(express.json());
   await initDB();
