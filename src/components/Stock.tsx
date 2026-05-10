@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Item, StockLog } from '@/src/types';
 import { formatDate, cn } from '@/src/lib/utils';
 import { ArrowDownLeft, ArrowUpRight, History, Send } from 'lucide-react';
+import { apiUrl } from '@/src/lib/api';
 import { motion } from 'motion/react';
 
 export default function Stock() {
@@ -18,8 +19,8 @@ export default function Stock() {
 
   const fetchData = () => {
     Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/items`).then(res => res.json()),
-      fetch(`${import.meta.env.VITE_API_URL}/api/stock-logs`).then(res => res.json())
+      fetch(apiUrl('/api/items')).then(res => res.json()),
+      fetch(apiUrl('/api/stock-logs')).then(res => res.json())
     ]).then(([itemsData, logsData]) => {
       setItems(itemsData);
       setLogs(logsData);
@@ -39,7 +40,7 @@ export default function Stock() {
     }
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/stock-logs`, {
+      const res = await fetch(apiUrl('/api/stock-logs'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

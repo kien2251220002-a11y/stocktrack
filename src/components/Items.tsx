@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, X } from 'lucide-react';
 import { Item } from '@/src/types';
 import { formatDate } from '@/src/lib/utils';
+import { apiUrl } from '@/src/lib/api';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Items() {
@@ -12,7 +13,7 @@ export default function Items() {
   const [loading, setLoading] = useState(true);
 
   const fetchItems = () => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/items`)
+    fetch(apiUrl('/api/items'))
       .then(res => res.json())
       .then(data => {
         setItems(data);
@@ -29,7 +30,7 @@ export default function Items() {
     if (!newItem.name || !newItem.sku || !newItem.unit) return;
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/items`, {
+      const res = await fetch(apiUrl('/api/items'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newItem)
@@ -47,7 +48,7 @@ export default function Items() {
   const handleDeleteItem = async (id: number) => {
     if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/items/${id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/items/${id}`), { method: 'DELETE' });
       if (res.ok) fetchItems();
     } catch (err) {
       console.error(err);

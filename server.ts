@@ -12,7 +12,13 @@ async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
-  app.use(cors({ origin: process.env.ALLOWED_ORIGIN || "*" }));
+  const allowedOrigins = (process.env.ALLOWED_ORIGIN || "").split(",").filter(Boolean);
+  const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : "*";
+  
+  app.use(cors({ 
+    origin: corsOrigin,
+    credentials: true
+  }));
   app.use(express.json());
   await initDB();
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Package, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { Item, Stats } from '@/src/types';
-import { cn } from '@/src/lib/utils';
+import { apiUrl } from '@/src/lib/api';
 import { motion } from 'motion/react';
 
 export default function Dashboard() {
@@ -11,8 +11,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/stats`).then(res => res.json()),
-      fetch(`${import.meta.env.VITE_API_URL}/api/inventory`).then(res => res.json())
+      fetch(apiUrl('/api/stats')).then(res => res.json()),
+      fetch(apiUrl('/api/inventory')).then(res => res.json())
     ]).then(([statsData, inventoryData]) => {
       setStats(statsData);
       setInventory(inventoryData);
