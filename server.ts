@@ -14,7 +14,7 @@ async function startServer() {
 
   app.use(cors({
     origin: process.env.ALLOWED_ORIGIN || "*",
-    credentials: true
+    credentials: false
   }));
   app.use(express.json());
   await initDB();
