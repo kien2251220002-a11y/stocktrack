@@ -10,4 +10,5 @@ coverage/
 inventory.db
 *.db
 !.env.example
+data/
 
