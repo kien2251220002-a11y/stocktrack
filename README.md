@@ -63,25 +63,45 @@ Server sẽ chạy tại `http://localhost:3000`
 - Docker 20.10+
 - Docker Compose 2.0+
 
-### Chạy ứng dụng
+### Chạy ứng dụng (Docker Compose)
 
-1. Build và chạy container:
+Project hiện được cấu hình để chạy **2 service** tách biệt: `backend` và `frontend`.
+
+1. Build và chạy cả hai service:
 ```bash
-docker compose up -d
+docker compose up --build -d
 ```
 
-2. Ứng dụng sẽ chạy tại `http://localhost:3000`
+2. Truy cập dịch vụ:
+- Frontend (nginx): http://localhost:8081
+- Backend (API): http://localhost:3000
 
-3. Database sẽ được lưu tại `./data/inventory.db`
+3. Lưu dữ liệu:
+- Database/volume: `./data` (được mount vào `backend` service)
 
 4. Dừng ứng dụng:
 ```bash
 docker compose down
 ```
 
-5. Xóa container và volume:
+5. Xóa containers và volumes:
 ```bash
 docker compose down -v
+```
+
+Lưu ý về serving frontend:
+- Theo mặc định, `backend` **không** phục vụ static files (trang `dist/`) — frontend được phục vụ riêng bởi `nginx` trong `frontend` service.
+- Nếu bạn muốn backend phục vụ static files (ví dụ: single-container deployment), set biến môi trường `SERVE_STATIC=true` trên `backend` service trước khi chạy:
+
+```bash
+# example: run backend with SERVE_STATIC enabled
+docker compose run -e SERVE_STATIC=true backend
+```
+
+Xây image thủ công (nếu cần):
+```bash
+docker build -f Dockerfile.backend -t stocktrack-backend .
+docker build -f Dockerfile.frontend -t stocktrack-frontend .
 ```
 
 ## Danh sách API Endpoints
@@ -172,6 +192,6 @@ VITE_API_URL=http://localhost:3000  # URL API cho frontend
 
 ---
 
-**Phiên bản**: 1.0.0  
+**Phiên bản**: 1.0.0
 **Cập nhật lần cuối**: 2026-05-10
 

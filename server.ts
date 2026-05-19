@@ -193,19 +193,26 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
+  // Frontend serving
+  // - In development, use Vite middleware for HMR.
+  // - In production, backend will NOT serve static files by default
+  //   because frontend is expected to be served separately (nginx/Vercel).
+  //   To enable backend static serving (single-container deployment), set
+  //   environment variable `SERVE_STATIC=true` on the backend service.
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (process.env.SERVE_STATIC === "true") {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
+  } else {
+    console.log("SERVE_STATIC not enabled — backend will not serve frontend static files.");
   }
 
   // Global error handler
